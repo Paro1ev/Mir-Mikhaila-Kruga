@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Корзина</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #fff;
+      font-family: Arial, sans-serif;
+      color: #333;
+    }
+    .main-title {
+      text-align: center;
+      font-size: 2.5rem;
+      margin: 20px 0;
+    }
+    .auth-box {
+      background-color: #000;
+      padding: 30px;
+      border-radius: 8px;
+      margin: 20px auto;
+      max-width: 800px;
+    }
+    .cart-item {
+      border: 1px solid #444;
+      padding: 15px;
+      margin: 10px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background-color: #222;
+      color: white;
+    }
+    .cart-item img {
+      max-width: 100px;
+      height: auto;
+    }
+    input, textarea, button {
+      margin: 5px;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #fff;
+      color: #000;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #ccc;
+    }
+    .order {
+      border: 1px solid #444;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      background-color: #222;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>🛒 Ваша корзина</h1>
+    <div v-if="cartItems.length === 0">
+      <p>Ваша корзина пуста</p>
+    </div>
+    <div v-else>
+      <div v-for="item in cartItems" :key="item.id" class="cart-item">
+        <img :src="item.productImage" :alt="item.productName">
+        <div>
+          <h3>{{ item.productName }}</h3>
+          <p>Цена: {{ item.price }}₽ × {{ item.quantity }} = {{ item.price * item.quantity }}₽</p>
+          <div>
+            <button @click="updateQuantity(item.id, item.quantity - 1)">-</button>
+            <input type="number" v-model.number="item.quantity" min="1" style="width: 50px">
+            <button @click="updateQuantity(item.id, item.quantity + 1)">+</button>
+            <button @click="removeFromCart(item.id)" style="margin-left: 20px">Удалить</button>
+          </div>
+        </div>
+      </div>
+      <div class="cart-total">
+        Итого: {{ total }}₽
+      </div>
+      <h2>🚚 Данные для доставки</h2>
+      <div style="max-width: 400px">
+        <input v-model="customerData.name" placeholder="Ваше имя" required>
+        <input v-model="customerData.phone" placeholder="Телефон" required type="tel">
+        <textarea v-model="customerData.address" placeholder="Адрес" required rows="3"></textarea>
+        <button @click="placeOrder" style="margin-top: 15px">Оформить заказ</button>
+      </div>
+    </div>
+    <h2>🗂 История заказов</h2>
+    <div v-for="order in orders" :key="order.id" class="order">
+      <p>Заказ #{{ order.id.slice(0, 8) }}</p>
+      <p>Дата: {{ new Date(order.date).toLocaleString() }}</p>
+      <p>Статус: {{ order.status }}</p>
+      <div v-for="(item, index) in order.items" :key="index">
+        {{ item.productName }} × {{ item.quantity }} = {{ item.price * item.quantity }}₽
+      </div>
+    </div>
+  </div>
+  <script>
+    const API_URL = "http://localhost:5250";
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Для просмотра корзины необходимо авторизоваться");
+      window.location.href = "index.html";
+    }
+    new Vue({
+      el: '#app',
+      data: {
+        cartItems: [],
+        orders: [],
+        customerData: {
+          name: '',
+          phone: '',
+          address: ''
+        }
+      },
+      computed: {
+        total() {
+          return this.cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        }
+      },
+      methods: {
+        async fetchCart() {
+          try {
+            const response = await fetch(`${API_URL}/cart`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error("Ошибка загрузки корзины");
+            this.cartItems = await response.json();
+          } catch (error) {
+            alert(error.message);
+          }
+        },
+        async updateQuantity(itemId, newQuantity) {
+          if (newQuantity < 1) return;
+          try {
+            await fetch(`${API_URL}/cart/update/${itemId}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({ quantity: newQuantity })
+            });
+            await this.fetchCart();
+          } catch (error) {
+            alert(error.message);
+          }
+        },
+        async removeFromCart(itemId) {
+          if (!confirm("Удалить товар из корзины?")) return;
+          try {
+            await fetch(`${API_URL}/cart/remove/${itemId}`, {
+              method: "DELETE",
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            await this.fetchCart();
+          } catch (error) {
+            alert(error.message);
+          }
+        },
+        async placeOrder() {
+          if (!this.validateForm()) return;
+          try {
+            const response = await fetch(`${API_URL}/cart/checkout`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify(this.customerData)
+            });
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.detail);
+            }
+            alert("🎉 Заказ успешно оформлен!");
+            this.cartItems = [];
+            this.customerData = { name: '', phone: '', address: '' };
+          } catch (error) {
+            alert(error.message);
+          }
+        },
+        validateForm() {
+          if (!this.customerData.name.trim()) {
+            alert("Укажите ваше имя");
+            return false;
+          }
+          if (!this.customerData.phone.trim()) {
+            alert("Укажите телефон");
+            return false;
+          }
+          if (!this.customerData.address.trim()) {
+            alert("Укажите адрес доставки");
+            return false;
+          }
+          return true;
+        },
+        async loadOrders() {
+          try {
+            const response = await fetch(`${API_URL}/orders`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            this.orders = await response.json();
+          } catch (error) {
+            alert(error.message);
+          }
+        }
+      },
+      mounted() {
+        this.fetchCart();
+        this.loadOrders();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ-панель</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #fff;
+      font-family: Arial, sans-serif;
+      color: #333;
+    }
+    .main-title {
+      text-align: center;
+      font-size: 2.5rem;
+      margin: 20px 0;
+    }
+    .auth-box {
+      background-color: #000;
+      padding: 30px;
+      border-radius: 8px;
+      margin: 20px auto;
+      max-width: 800px;
+      color: white;
+    }
+    input, button {
+      margin: 5px;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #fff;
+      color: #000;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    button:hover {
+      background-color: #ccc;
+    }
+    .product {
+      background-color: #222;
+      border: 1px solid #444;
+      padding: 15px;
+      margin: 10px;
+      border-radius: 8px;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>Панель администратора</h1>
+  <button onclick="logout()">Выйти</button>
+  <h2>Добавить товар</h2>
+  <input type="text" id="name" placeholder="Название">
+  <input type="text" id="description" placeholder="Описание">
+  <input type="number" id="price" placeholder="Цена">
+  <input type="text" id="imageUrl" placeholder="URL изображения">
+  <button onclick="addProduct()">Добавить товар</button>
+  <h2>Редактировать товар</h2>
+  <input type="hidden" id="editId">
+  <input type="text" id="editName" placeholder="Название">
+  <input type="text" id="editDescription" placeholder="Описание">
+  <input type="number" id="editPrice" placeholder="Цена">
+  <input type="text" id="editImageUrl" placeholder="URL изображения">
+  <button onclick="saveProduct()">Сохранить изменения</button>
+  <h2>Список товаров</h2>
+  <div id="products"></div>
+  <script>
+    const user = JSON.parse(localStorage.getItem("user"));
+    if (!user || user.role !== "admin") {
+      alert("У вас нет доступа к админ-панели!");
+      window.location.href = "shop.html";
+    }
+    const API_URL = "http://localhost:5250";
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Вы не авторизованы! Перейдите на страницу входа.");
+      window.location.href = "index.html";
+    }
+    async function addProduct() {
+      const name = document.getElementById("name").value.trim();
+      const description = document.getElementById("description").value.trim();
+      const price = parseFloat(document.getElementById("price").value);
+      const imageUrl = document.getElementById("imageUrl").value.trim();
+      if (!name || !description || isNaN(price) || !imageUrl) {
+        alert("Все поля обязательны!");
+        return;
+      }
+      const productData = { name, description, price, image: imageUrl };
+      try {
+        const response = await fetch(`${API_URL}/products`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(productData)
+        });
+        if (!response.ok) {
+          throw new Error("Ошибка при добавлении товара!");
+        }
+        alert("Товар успешно добавлен!");
+        fetchProducts();
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+    async function fetchProducts() {
+      try {
+        const response = await fetch(`${API_URL}/products`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          throw new Error("Ошибка загрузки товаров!");
+        }
+        const products = await response.json();
+        const productsDiv = document.getElementById("products");
+        productsDiv.innerHTML = "";
+        products.forEach(product => {
+          const productDiv = document.createElement("div");
+          productDiv.classList.add("product");
+          productDiv.innerHTML = `
+            <strong>${product.name}</strong> - ${product.price}₽ <br>
+            <small>${product.description}</small><br>
+            <a href="product.html?id=${product.id}">
+              <img src="${product.image}" alt="Изображение товара">
+            </a><br>
+            <button onclick="editProduct('${product.id}', '${product.name}', '${product.description}', ${product.price}, '${product.image}')">Редактировать</button>
+            <button onclick="deleteProduct('${product.id}')">Удалить</button>
+          `;
+          productsDiv.appendChild(productDiv);
+        });
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+    function editProduct(id, name, description, price, image) {
+      document.getElementById("editId").value = id;
+      document.getElementById("editName").value = name;
+      document.getElementById("editDescription").value = description;
+      document.getElementById("editPrice").value = price;
+      document.getElementById("editImageUrl").value = image;
+    }
+    async function saveProduct() {
+      const id = document.getElementById("editId").value;
+      const name = document.getElementById("editName").value.trim();
+      const description = document.getElementById("editDescription").value.trim();
+      const price = parseFloat(document.getElementById("editPrice").value);
+      const imageUrl = document.getElementById("editImageUrl").value.trim();
+      if (!id || !name || !description || isNaN(price) || !imageUrl) {
+        alert("Все поля обязательны!");
+        return;
+      }
+      const productData = { name, description, price, image: imageUrl };
+      try {
+        const response = await fetch(`${API_URL}/products/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(productData)
+        });
+        if (!response.ok) {
+          throw new Error("Ошибка при обновлении товара!");
+        }
+        alert("Товар успешно обновлён!");
+        fetchProducts();
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+    async function deleteProduct(id) {
+      if (!confirm("Вы уверены, что хотите удалить этот товар?")) return;
+      try {
+        const response = await fetch(`${API_URL}/products/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!response.ok) {
+          throw new Error("Ошибка при удалении товара!");
+        }
+        alert("Товар удалён!");
+        fetchProducts();
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+    function logout() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "index.html";
+    }
+    fetchProducts();
+  </script>
+</body>
+</html>

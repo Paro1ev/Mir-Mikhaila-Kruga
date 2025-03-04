@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Авторизация и Регистрация</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #fff;
+      font-family: Arial, sans-serif;
+      color: #333;
+    }
+    .main-title {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-top: 50px;
+    }
+    .forms-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 50px;
+      margin-top: 50px;
+      padding: 0 20px;
+    }
+    .auth-box {
+      background-color: #000;
+      padding: 30px;
+      border-radius: 8px;
+      width: 300px;
+    }
+    .auth-box h2 {
+      color: #fff;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .auth-box form {
+      display: flex;
+      flex-direction: column;
+    }
+    .auth-box input {
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 1rem;
+    }
+    .auth-box button {
+      padding: 10px;
+      background-color: #fff;
+      color: #000;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: bold;
+      transition: background-color 0.2s ease;
+    }
+    .auth-box button:hover {
+      background-color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1 class="main-title">Мир Михаила Круга</h1>
+  <div class="forms-container">
+    <div class="auth-box">
+      <h2>Вход</h2>
+      <form id="loginForm">
+        <input type="email" id="loginEmail" placeholder="Email" required />
+        <input type="password" id="loginPassword" placeholder="Пароль" required />
+        <button type="submit">Войти</button>
+      </form>
+    </div>
+    <div class="auth-box">
+      <h2>Регистрация</h2>
+      <form id="registerForm">
+        <input type="text" id="regName" placeholder="Имя" required />
+        <input type="email" id="regEmail" placeholder="Email" required />
+        <input type="password" id="regPassword" placeholder="Пароль" required />
+        <button type="submit">Зарегистрироваться</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    const API_URL = "http://localhost:5250";
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const response = await fetch(`${API_URL}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('regName').value,
+            email: document.getElementById('regEmail').value,
+            passwordHash: document.getElementById('regPassword').value,
+            role: 'user'
+          })
+        });
+        const text = await response.text();
+        alert(text);
+      } catch (error) {
+        console.error("Ошибка при регистрации:", error);
+        alert("Ошибка при регистрации.");
+      }
+    });
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      if (!email || !password) {
+        alert("Введите email и пароль!");
+        return;
+      }
+      try {
+        const response = await fetch(`${API_URL}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.detail || "Ошибка входа");
+        }
+        if (!result.user) {
+          throw new Error("Не удалось получить данные пользователя.");
+        }
+        localStorage.setItem("token", result.token);
+        localStorage.setItem("user", JSON.stringify(result.user));
+        window.location.href = (result.user.role === "admin") ? "admin.html" : "shop.html";
+      } catch (error) {
+        console.error("Ошибка при входе:", error.message);
+        alert(error.message);
+      }
+    });
+  </script>
+</body>
+</html>
